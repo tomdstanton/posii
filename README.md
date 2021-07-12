@@ -1,4 +1,4 @@
-# posii :dna: :female_detective: :microbe: :abacus:
+# posii :dna::female_detective::abacus:
 
 <centre>![Image](https://github.com/tomdstanton/posii/blob/master/posii.png)
 
