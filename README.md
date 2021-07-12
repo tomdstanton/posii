@@ -13,10 +13,14 @@ Issues/queries/advice?
 [6.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
 
 ### Introduction :open_book:
-`posii` takes fasta sequences and a position/slice then returns
-the residues found there. If a residue(s) is also given,
-`posii` will return the accessions of the sequences with the residue(s)
+* `posii` takes fasta sequences and a position/slice then returns
+the residues found there. 
+* If a residue(s) is also given, `posii` will return the accessions of the sequences with the residue(s)
 at that position/slice.
+* If given multiple sequences, `posii` can 
+  calculate the percentage of each residue(s) at the given
+  position/slice.
+
 
 **If you found posii helpful, please cite:**
 ```
@@ -33,15 +37,25 @@ git clone --recursive https://github.com/tomdstanton/posii && cd posii && python
 ```
 ### Usage :computer:
 ```sh
-usage: posii <input.fasta> pos
+usage: posii <input.fasta> -pos
 
-positional arguments:
-  pos         position (2) or slice (2:4)
+  -pos         position (2) or slice (2:4)
 
 optional arguments:
-  -res RES    returns accessions with this residue at chosen position
+  -res RES    returns accessions with this residue(s) at chosen position
   -tt TT      translation table to return amino acid position
   -perc       calculates % of each residue at chosen position
   -v          prints information to stderr
   -h, --help  show this help message and exit
+```
+### Cookbook :cook:
+
+```sh
+posii genes/*.fasta -pos 420
+cat protein.faa gene.faa | posii -pos 140 -tt 11
+posii CDS.fasta -pos 1:3
+posii CDS.fasta -pos 1:3 -res atg
+cat genes/*.fasta | posii -pos 140 -tt 11 -res F
+posii gene_aligned.fasta -pos 420 -perc
+posii gene_aligned.fasta -pos 140:144 -res KGGM
 ```

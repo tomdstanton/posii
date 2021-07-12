@@ -12,13 +12,14 @@ __status__ = "Development"
 
 
 def parse_args():
-    parser = ArgumentParser(add_help=False, usage="posii <input.fasta> pos")
+    parser = ArgumentParser(add_help=False, usage="posii <input.fasta> -pos")
     parser.add_argument('input', nargs='*', default=['-'], help=SUPPRESS)
+    parser.add_argument('-pos', required=True, type=str, help='position (2) or slice (2:4)')
+
     parser.print_usage = parser.print_help
-    parser.add_argument('pos', type=str, help='position (2) or slice (2:4)')
     parser.add_argument('-res', type=str, help='returns accessions with this residue at chosen position')
     parser.add_argument('-tt', type=int, help='translation table to return amino acid position')
-    parser.add_argument('-perc',  action='store_true', help='calculates %% of each residue at chosen position')
+    parser.add_argument('-perc', action='store_true', help='calculates %% of each residue at chosen position')
     parser.add_argument('-v', action='store_true', default=False, help='prints information to stderr')
     parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
     return parser.parse_args()
@@ -114,14 +115,14 @@ def main():
         else:  # load in sequences
             seqs[file] = {}
             for i in seq.split('>')[1:]:
-                i= i.split('\n')
+                i = i.split('\n')
                 header = i[0].split(' ')[0]
                 for f in seqs.keys():
-                    if header in seqs[f].keys(): # make sure header is unique
+                    if header in seqs[f].keys():  # make sure header is unique
                         logger.error(f'error, {header} in {file} already in {f}')
-                        sys.exit() # two identical headers might screw stuff up later on, best to exit
+                        sys.exit()  # two identical headers might screw stuff up later on, best to exit
                     else:
-                        s = ''.join(i[1:]) # make sequences one line without header
+                        s = ''.join(i[1:])  # make sequences one line without header
                         if len(set('ACDEFGHIKLMNPQRSTVWY') - set(s.upper())) < 16:
                             logger.info(f'guessing {header} is protein')
                             seqs[file][header] = [s.upper(), 'protein']
@@ -133,29 +134,39 @@ def main():
                                 logger.info(f'guessing {header} is dna')
                                 seqs[file][header] = [s.lower(), 'dna']
 
-
-### Parse positions from user input ###
+    ### Parse positions from user input ###
     if ':' in args.pos:
-        pos1 = int(args.pos.split(':')[0])-1
+        pos1 = int(args.pos.split(':')[0]) - 1
         pos2 = int(args.pos.split(':')[1])
     else:
-        pos1 = int(args.pos)-1
-        pos2=False
+        pos1 = int(args.pos) - 1
+        pos2 = False
 
-
-### Iterate through files, then accessions and print results ###
+    ### Iterate through files, then accessions and print results ###
     residues = []
-    for file in seqs.keys(): # each file
-        for acc, seq in seqs[file].items(): # each accession, v[0] being the sequence
+    accessions = []
+    for file in seqs.keys():  # each file
+        for acc, seq in seqs[file].items():  # each accession, v[0] being the sequence
             if pos2:
-                residues.append(seq[0][pos1:pos2])
-            else: residues.append(seq[0][pos1])
+                residue = seq[0][pos1:pos2]
+            else:
+                residue = seq[0][pos1]
+            residues.append(residue)
+            if args.res == residue:
+                accessions.append(acc)
 
-    if args.perc:
-        for i in set(residues):
-            print(f'{i}: {round(residues.count(i)/len(residues)*100, 2)}%')
+    if args.res:
+        if args.perc:
+            print(f'{args.res}: {round(len(accessions) / len(residues) * 100, 2)}%')
+        else:
+            print(*accessions, sep="\n")
+
     else:
-        print(*residues, sep="\n")
+        if args.perc:
+            for i in set(residues):
+                print(f'{i}: {round(residues.count(i) / len(residues) * 100, 2)}%')
+        else:
+            print(*residues, sep="\n")
 
 
 if __name__ == '__main__':
