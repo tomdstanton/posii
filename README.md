@@ -48,6 +48,19 @@ optional arguments:
   -v          prints information to stderr
   -h, --help  show this help message and exit
 ```
+**Woah there, there are some rules...**
+* DNA is ALWAYS lower case. When searching for a 
+  nucleotide residue at a position, use 'a' _not_ 'A'.
+  
+* You can totally  mix nucleotide and amino acid inputs,
+why the hell not?! However, using `-tt` will only translate
+  DNA to protein, not reverse-translate. I'm too lazy to implement 
+  this and is unnecessary for most use cases.
+  
+* Positions and slices should be formatted as number, or 
+number:number... I don't want to have to put a failsafe 
+  in for people using wonky inputs, ok?
+
 ### Cookbook :cook:
 
 ```sh
@@ -58,4 +71,27 @@ posii CDS.fasta -pos 1:3 -res atg
 cat genes/*.fasta | posii -pos 140 -tt 11 -res F
 posii gene_aligned.fasta -pos 420 -perc
 posii gene_aligned.fasta -pos 140:144 -res KGGM
+```
+
+### Case uses :cook:
+_Klebsiella pneumoniae_ ST258 clones have reduced
+carbapepnem susceptibility due to a GD-loop insrtion
+in the passive-diffusion outer-membrane protein (porin)
+OmpK36 (OmpC). OmpK36 protein sequences from 
+1000 random  _K. pneumoniae_ Genbank assemblies
+were concatenated to a fasta file. We will align these
+sequences with MUSCLE and pipe into posii so we can
+examine how many of the sequences have this insertion.
+```sh
+cat OmpK36_multi.faa | muscle | posii -pos 159:166 -perc
+G--GDTYG: 0.1%
+G--G---D: 68.78%
+GGDT---D: 1.43%
+GG-D---D: 0.31%
+GGDG---D: 22.21%
+G--GDTYD: 0.1%
+G--GD--D: 2.35%
+GGD----D: 0.1%
+G--GDT-D: 0.41%
+GG-----D: 4.2%
 ```
