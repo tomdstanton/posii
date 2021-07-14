@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from argparse import ArgumentParser, SUPPRESS
+import os, logging, sys, gzip
+
+__author__ = "Tom Stanton"
+__license__ = "gpl-3.0"
+__maintainer__ = "Tom Stanton"
+__email__ = "tomdstanton@gmail.com"
+__status__ = "Development"
+
+
+def parse_args():
+    parser = ArgumentParser(add_help=False, usage="posii <input.fasta> -pos")
+    parser.add_argument('input', nargs='*', default=['-'], help=SUPPRESS)
+    parser.add_argument('-pos', required=True, nargs='*', type=str, help='position (2) or slice (2:4)')
+
+    parser.print_usage = parser.print_help
+    parser.add_argument('-res', type=str, help='returns accessions with this residue at chosen position')
+    parser.add_argument('-tt', type=int, help='translation table to return amino acid position')
+    parser.add_argument('-perc', action='store_true', help='calculates %% of each residue at chosen position')
+    parser.add_argument('-v', action='store_true', default=False, help='verbose (STDERR)')
+    parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
+    return parser.parse_args()
+
+
+def translate_dna(s, table):
+    codons = [a + b + c for a in "tcag" for b in "tcag" for c in "tcag"]
+    table, peptide = dict(zip(codons, table)), ''
+    for i in range(0, len(s), 3):
+        codon = s[i: i + 3]
+        amino_acid = table.get(codon, '*')
+        if amino_acid != '*':
+            peptide += amino_acid
+        else:
+            break
+    return peptide
+
+
+def main():
+    logger = logging.getLogger('root')
+    logging.basicConfig(format='%(asctime)s | %(message)s', datefmt="%H:%M:%S")
+    logger.setLevel(logging.DEBUG)
+    args = parse_args()
+    if not args.v:
+        logger.setLevel(logging.ERROR)
+
+    logger.info(f'this is posii 0.0.1 by {__author__}')
+    logger.info(f'running on {sys.platform} with Python '
+                f'{str(sys.version_info[:3])[1:-1].replace(", ", ".")}')
+
+    ##### Check input #####
+    seqs = {}  # dictionary where key is filename
+    seq_num = 0
+    protein = False
+    if args.tt:
+        tt = {
+            1: 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            2: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG',
+            3: 'FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            5: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSSSVVVVAAAADDEEGGGG',
+            6: 'FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            9: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+            10: 'FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            11: 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            12: 'FFLLSSSSYY**CC*WLLLSPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            13: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG',
+            14: 'FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+            15: 'FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            16: 'FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            21: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+            22: 'FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            23: 'FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            24: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG',
+            25: 'FFLLSSSSYY**CCGWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            26: 'FFLLSSSSYY**CC*WLLLAPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            27: 'FFLLSSSSYYQQCCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            28: 'FFLLSSSSYYQQCCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            29: 'FFLLSSSSYYYYCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            30: 'FFLLSSSSYYEECC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            31: 'FFLLSSSSYYEECCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            32: 'FFLLSSSSYY*WCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+            33: 'FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG'}
+        if args.tt not in list(tt):
+            logger.error(f'{args.tt} is not a valid translation table code')
+            sys.exit()
+        else:
+            tt, protein = tt[args.tt], True
+            logger.info(f'returning positions from seq(s) as protein using translation table {args.tt}')
+
+    for file in args.input:  # loop over inout files
+        if file == '-':  # if standard input
+            try:
+                seq = sys.stdin.read()
+            except UnicodeDecodeError:
+                logger.error(f'cannot read STDIN, if gzipped try: cat file | gunzip -c | posii')
+                sys.exit()
+        else:  # if file in saved to memory
+            if not os.path.isfile(file):
+                logger.error(f'{file} is not a valid file')
+                continue
+            try:
+                with open(file, 'r') as fr:
+                    seq = fr.read()
+            except IsADirectoryError:
+                logger.error(f'{file} is a directory, skipping...')
+                continue
+            except UnicodeDecodeError:
+                try:
+                    with gzip.open(file, "rt") as fr:
+                        seq = fr.read()
+                except OSError:
+                    logger.error(f'could not open {file}, skipping...')
+                    continue
+
+        ### Check file contents ###
+        stype = seq[0]
+        if stype not in ['>', '@']:
+            logger.error(f'{file} not a properly formatted fasta file')
+            continue
+        else:  # load in sequences
+            seqs[file] = {}
+            for i in seq.split(stype)[1:]:
+                i = i.split('\n')
+                header = i[0].split(' ')[0]
+                for f in seqs.keys():
+                    if header in seqs[f].values():  # make sure header is unique
+                        logger.error(f'error, {header} in {file} already in {f}')
+                        sys.exit()  # two identical headers might screw stuff up later on, best to exit
+                    else:
+                        s = ''.join(i[1:])  # make sequences one line without header
+                        if (not stype == '@') and len(set(s)) > 4:
+                            # this is a nifty way of guessing molecule, count unique residues in seq with set and len
+                            # d/rna is a 4 letter alphabet, so if >4, likely to be protein
+                            # obviously scenerios where this isn't case, make more robust
+                            seqs[file][header] = [s.upper(), 'protein']
+                            seq_num += 1
+                        else:
+                            if protein:
+                                #logger.info(f'guessing {header} is dna, translating')
+                                seqs[file][header] = [translate_dna(s.lower(), tt), 'protein']
+                                seq_num += 1
+                            else:
+                                #logger.info(f'guessing {header} is dna')
+                                seqs[file][header] = [s.lower(), 'dna']
+                                seq_num += 1
+
+    if args.res:
+        print(args.res.isupper)
+
+        if args.res.islower and 'dna' not in set([g[1] for h in seqs.values() for g in h.values()]):
+            logger.error(f'searching for dna residue(s) in protein-only seq(s), converting to upper-case')
+            args.res = args.res.upper()
+        elif not args.res.islower and 'protein' not in set([g[1] for h in seqs.values() for g in h.values()]):
+            logger.error(f'searching for amino acid residue(s) in DNA-only seq(s), converting to lower-case')
+            args.res = args.res.lower()
+
+    for p in args.pos:
+        ### Parse positions from user input ###
+        if not p.isalpha():
+            if ':' in p:
+                pos1, pos2 = int(p.split(':')[0]), int(p.split(':')[1])
+                if pos1 >= pos2:
+                    logger.error(f'error, for a slice position1 needs to be greater than position2')
+                    continue
+            else:
+                pos1, pos2 = int(p), False
+            logger.info(f'extracting residue(s) at pos {p} for {seq_num} seq(s) from {len(seqs)} file(s)')
+        else:
+            logger.error(f'{p} is not a valid position')
+            continue
+
+        ### Iterate through files, then accessions and print results ###
+        residues, accessions = [], []
+        for file in seqs.keys():  # each file
+            for acc, seq in seqs[file].items():  # each accession, v[0] being the sequence
+                if pos2 and pos1 <= len(seq[0]) and pos2 <= len(seq[0]):
+                    residue = seq[0][pos1-1:pos2]
+                elif not pos2 and pos1 <= len(seq[0]):
+                    residue = seq[0][pos1-1]
+                else:
+                    logger.error(f'{p} out of range for {acc}')
+                    continue
+
+                residues.append(residue)
+                if args.res == residue:
+                    accessions.append(acc)
+
+        if args.res:
+            if accessions:
+                if args.perc:
+                    print(f'{args.res}: {round(len(accessions) / len(residues) * 100, 2)}%')
+                else:
+                    print(*accessions, sep="\n")
+            else:
+                logger.error(f'{args.res} at pos {p} not found in seq(s)')
+
+        else:
+            if args.perc:
+                for i in set(residues):
+                    print(f'{i}: {round(residues.count(i) / len(residues) * 100, 2)}%')
+            else:
+                print(*residues, sep="\n")
+
+
+if __name__ == '__main__':
+    main()
