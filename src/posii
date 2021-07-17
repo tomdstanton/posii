@@ -3,12 +3,16 @@
 
 from argparse import ArgumentParser, SUPPRESS
 import os, logging, sys, gzip
+from math import log
 
 __author__ = "Tom Stanton"
 __license__ = "gpl-3.0"
 __maintainer__ = "Tom Stanton"
 __email__ = "tomdstanton@gmail.com"
 __status__ = "Development"
+
+iupac_aa = 'ACDEFGHIKLMNPQRSTVWY'
+iupac_dna = 'tcag'
 
 
 def parse_args():
@@ -19,14 +23,15 @@ def parse_args():
     parser.print_usage = parser.print_help
     parser.add_argument('-res', type=str, help='returns accessions with this residue at chosen position')
     parser.add_argument('-tt', type=int, help='translation table to return amino acid position')
-    parser.add_argument('-perc', action='store_true', help='calculates %% of each residue at chosen position')
+    parser.add_argument('-perc', action='store_true', help='calculates %% of each residue at chosen position(s)')
+    parser.add_argument('-ent', action='store_true', help='calculates Shannon Entropy of position(s)')
     parser.add_argument('-v', action='store_true', default=False, help='verbose (STDERR)')
     parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
     return parser.parse_args()
 
 
 def translate_dna(s, table):
-    codons = [a + b + c for a in "tcag" for b in "tcag" for c in "tcag"]
+    codons = [a + b + c for a in iupac_dna for b in iupac_dna for c in iupac_dna]
     table, peptide = dict(zip(codons, table)), ''
     for i in range(0, len(s), 3):
         codon = s[i: i + 3]
@@ -36,6 +41,19 @@ def translate_dna(s, table):
         else:
             break
     return peptide
+
+
+def entropy(res_list, alphabet):
+    x = 0
+    if 'protein' in alphabet:
+        alphabet = iupac_aa
+    else:
+        alphabet = iupac_dna
+    for col in range(len(res_list[0])):
+        c = [res[col] for res in res_list]
+        for l in (p for p in alphabet if p in c):
+            x += -((c.count(l) / len(alphabet)) * log(c.count(l) / len(alphabet), 2))
+    return x
 
 
 def main():
@@ -51,9 +69,7 @@ def main():
                 f'{str(sys.version_info[:3])[1:-1].replace(", ", ".")}')
 
     ##### Check input #####
-    seqs = {}  # dictionary where key is filename
-    seq_num = 0
-    protein = False
+    seq_num, protein, seqs = 0, False, {}  # dictionary where key is filename
     if args.tt:
         tt = {
             1: 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
@@ -82,7 +98,7 @@ def main():
             31: 'FFLLSSSSYYEECCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
             32: 'FFLLSSSSYY*WCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
             33: 'FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG'}
-        if args.tt not in list(tt):
+        if args.tt not in tt.keys():
             logger.error(f'{args.tt} is not a valid translation table code')
             sys.exit()
         else:
@@ -100,59 +116,56 @@ def main():
             if not os.path.isfile(file):
                 logger.error(f'{file} is not a valid file')
                 continue
-            try:
-                with open(file, 'r') as fr:
-                    seq = fr.read()
-            except IsADirectoryError:
-                logger.error(f'{file} is a directory, skipping...')
-                continue
-            except UnicodeDecodeError:
+            else:
                 try:
-                    with gzip.open(file, "rt") as fr:
+                    with open(file, 'r') as fr:
                         seq = fr.read()
-                except OSError:
-                    logger.error(f'could not open {file}, skipping...')
-                    continue
+                except UnicodeDecodeError:
+                    try:
+                        with gzip.open(file, "rt") as fr:
+                            seq = fr.read()
+                    except OSError:
+                        logger.error(f'could not open {file}, skipping...')
+                        continue
 
         ### Check file contents ###
         stype = seq[0]
+        molecule_set = set()
         if stype not in ['>', '@']:
             logger.error(f'{file} not a properly formatted fasta file')
             continue
         else:  # load in sequences
-            seqs[file] = {}
-            for i in seq.split(stype)[1:]:
-                i = i.split('\n')
-                header = i[0].split(' ')[0]
-                for f in seqs.keys():
-                    if header in seqs[f].values():  # make sure header is unique
-                        logger.error(f'error, {header} in {file} already in {f}')
-                        sys.exit()  # two identical headers might screw stuff up later on, best to exit
+            seqs[file] = {x[0].split(' ')[0]: ''.join(x[1:]).split('+')[0] for x in
+                          [i.split('\n') for i in seq.split(stype)[1:]]}
+            # loaded in dict comprehension, then iterate over as dict, I think more memory efficient
+            del seq  # get outta memory
+            for acc in seqs[file].keys():
+                if (not stype == '@') and len(set(seqs[file][acc])) > 4:
+                    # this is a nifty way of guessing molecule, count unique residues in seq with set and len
+                    # d/rna is a 4 letter alphabet, so if >4, likely to be protein
+                    # obviously scenerios where this isn't case, make more robust
+                    seqs[file][acc] = seqs[file][acc].upper()
+                    molecule_set.add('protein')
+                    seq_num += 1
+                else:
+                    if protein:
+                        # logger.info(f'guessing {header} is dna, translating')
+                        print(seqs[file][acc].lower())
+                        seqs[file][acc] = translate_dna(seqs[file][acc].lower(), tt)
+                        print(seqs[file][acc])
+                        molecule_set.add('protein')
+                        seq_num += 1
                     else:
-                        s = ''.join(i[1:])  # make sequences one line without header
-                        if (not stype == '@') and len(set(s)) > 4:
-                            # this is a nifty way of guessing molecule, count unique residues in seq with set and len
-                            # d/rna is a 4 letter alphabet, so if >4, likely to be protein
-                            # obviously scenerios where this isn't case, make more robust
-                            seqs[file][header] = [s.upper(), 'protein']
-                            seq_num += 1
-                        else:
-                            if protein:
-                                #logger.info(f'guessing {header} is dna, translating')
-                                seqs[file][header] = [translate_dna(s.lower(), tt), 'protein']
-                                seq_num += 1
-                            else:
-                                #logger.info(f'guessing {header} is dna')
-                                seqs[file][header] = [s.lower(), 'dna']
-                                seq_num += 1
+                        # logger.info(f'guessing {acc} is dna')
+                        seqs[file][acc] = seqs[file][acc].lower()
+                        molecule_set.add('dna')
+                        seq_num += 1
 
     if args.res:
-        print(args.res.isupper)
-
-        if args.res.islower and 'dna' not in set([g[1] for h in seqs.values() for g in h.values()]):
+        if args.res.islower and 'dna' not in molecule_set:
             logger.error(f'searching for dna residue(s) in protein-only seq(s), converting to upper-case')
             args.res = args.res.upper()
-        elif not args.res.islower and 'protein' not in set([g[1] for h in seqs.values() for g in h.values()]):
+        elif args.res.isupper and 'protein' not in molecule_set:
             logger.error(f'searching for amino acid residue(s) in DNA-only seq(s), converting to lower-case')
             args.res = args.res.lower()
 
@@ -175,10 +188,11 @@ def main():
         residues, accessions = [], []
         for file in seqs.keys():  # each file
             for acc, seq in seqs[file].items():  # each accession, v[0] being the sequence
-                if pos2 and pos1 <= len(seq[0]) and pos2 <= len(seq[0]):
-                    residue = seq[0][pos1-1:pos2]
-                elif not pos2 and pos1 <= len(seq[0]):
-                    residue = seq[0][pos1-1]
+                slen = len(seq)
+                if pos2 and pos1 <= slen and pos2 <= slen:
+                    residue = seq[pos1 - 1:pos2]
+                elif not pos2 and pos1 <= slen:
+                    residue = seq[pos1 - 1]
                 else:
                     logger.error(f'{p} out of range for {acc}')
                     continue
@@ -191,17 +205,29 @@ def main():
             if accessions:
                 if args.perc:
                     print(f'{args.res}: {round(len(accessions) / len(residues) * 100, 2)}%')
+                elif args.ent:
+                    if len(molecule_set) > 1:
+                        print(f'Shannon entropy for {p} = {entropy(residues, molecule_set)}')
+                    else:
+                        logger.error(f'entropy cannot be calculated for mixed molecules (DNA/protein)')
                 else:
                     print(*accessions, sep="\n")
             else:
                 logger.error(f'{args.res} at pos {p} not found in seq(s)')
-
         else:
-            if args.perc:
-                for i in set(residues):
-                    print(f'{i}: {round(residues.count(i) / len(residues) * 100, 2)}%')
+            if residues:
+                if args.perc:
+                    for i in set(residues):
+                        print(f'{i}: {round(residues.count(i) / len(residues) * 100, 2)}%')
+                elif args.ent:
+                    if len(molecule_set) == 1:
+                        print(f'Shannon entropy for {p} = {entropy(residues, molecule_set)}')
+                    else:
+                        logger.error(f'entropy cannot be calculated for mixed molecules (DNA/protein)')
+                else:
+                    print(*residues, sep="\n")
             else:
-                print(*residues, sep="\n")
+                logger.error(f'no residues found at {p}')
 
 
 if __name__ == '__main__':
