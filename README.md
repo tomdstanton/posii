@@ -52,14 +52,9 @@ optional arguments:
 * DNA is ALWAYS lower case. When searching for a 
   nucleotide residue at a position, use 'a' _not_ 'A'.
   
-* You can totally  mix nucleotide and amino acid inputs,
-why the hell not?! However, using `-tt` will only translate
-  DNA to protein, not reverse-translate. I'm too lazy to implement 
-  this and is unnecessary for most use cases.
+* You can mix nucleotide and amino acid inputs, however using `-tt` will only translate
+  DNA to protein, not reverse-translate.
   
-* Positions and slices should be formatted as number, or 
-number:number... I don't want to have to put a failsafe 
-  in for people using wonky inputs, ok?
 
 ### Cookbook :cook:
 
@@ -73,9 +68,9 @@ posii gene_aligned.fasta -pos 420 -perc
 posii gene_aligned.fasta -pos 140:144 -res KGGM
 ```
 
-### Case uses :cook:
+### Case uses 🔬:
 _Klebsiella pneumoniae_ ST258 clones have reduced
-carbapepnem susceptibility due to a GD-loop insrtion
+carbapepnem susceptibility due to a GD-loop insertion
 in the passive-diffusion outer-membrane protein (porin)
 OmpK36 (OmpC). OmpK36 protein sequences from 
 1000 random  _K. pneumoniae_ Genbank assemblies
