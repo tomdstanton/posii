@@ -68,9 +68,9 @@ posii gene_aligned.fasta -pos 420 -perc
 posii gene_aligned.fasta -pos 140:144 -res KGGM
 ```
 
-### Case uses 🔬:
+### Case uses 🔬
 _Klebsiella pneumoniae_ ST258 clones have reduced
-carbapepnem susceptibility due to a GD-loop insertion
+carbapenem susceptibility due to a GD-loop insertion
 in the passive-diffusion outer-membrane protein (porin)
 OmpK36 (OmpC). OmpK36 protein sequences from 
 1000 random  _K. pneumoniae_ Genbank assemblies
