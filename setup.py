@@ -1,14 +1,8 @@
 from setuptools import setup, find_packages
-from distutils.util import convert_path
-
-main_ns = {}
-ver_path = convert_path('posii/scripts/version.py')
-with open(ver_path) as ver_file:
-    exec(ver_file.read(), main_ns)
 
 setup(
     name="posii",
-    version=main_ns['__version__'],
+    version='0.0.1',
     author="Tom Stanton",
     author_email="tomdstanton@gmail.com",
     description="Position Interrogator",

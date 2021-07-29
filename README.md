@@ -13,7 +13,7 @@ Issues/queries/advice?
 [6.1]: http://i.imgur.com/0o48UoR.png (github icon with padding)
 
 ### Introduction :open_book:
-* `posii` takes fasta sequences and a position/slice then returns
+* `posii` takes fasta and/or fastq sequences and a position/slice then returns
 the residues found there. 
 * If a residue(s) is also given, `posii` will return the accessions of the sequences with the residue(s)
 at that position/slice.
@@ -37,7 +37,7 @@ git clone --recursive https://github.com/tomdstanton/posii && cd posii && python
 ```
 ### Usage :computer:
 ```sh
-usage: posii <input.fasta> -pos
+usage: posii <input.fastx> -pos
 
   -pos         position (2) or slice (2:4)
 
