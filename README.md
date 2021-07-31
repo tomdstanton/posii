@@ -57,16 +57,13 @@ optional arguments:
   
 
 ### Cookbook :cook:
-
-```sh
-posii genes/*.fasta -pos 420
-cat protein.faa gene.faa | posii -pos 140 -tt 11
-posii CDS.fasta -pos 1:3
-posii CDS.fasta -pos 1:3 -res atg
-cat genes/*.fasta | posii -pos 140 -tt 11 -res F
-posii gene_aligned.fasta -pos 420 -perc
-posii gene_aligned.fasta -pos 140:144 -res KGGM
-```
+return 420th residue for all sequences in a folder of fasta files: `posii genes/*.fasta -pos 420`
+concatenate gene and protein sequences, and return the 140th amino acid using the bacterial codon table: `sh cat protein.faa gene.faa | posii -pos 140 -tt 11`
+check potential start codons in a file of CDS: `posii CDS.fasta -pos 1:3`
+return accessions of CDS with an atg start codon: `posii CDS.fasta -pos 1:3 -res atg`
+concatenate DNA fasta files and return accessions with amino acid F in position 140 using the bacterial codon table: `sh cat genes/*.fasta | posii -pos 140 -tt 11 -res F`
+calulate the percentage of the 420th residue in a sequence alignment: `posii gene_aligned.fasta -pos 420 -perc`
+return accessions in a sequence alignemnt that have the sequence KGGM at positions 140-144: `posii gene_aligned.fasta -pos 140:144 -res KGGM`
 
 ### Case uses 🔬
 _Klebsiella pneumoniae_ ST258 clones have reduced
